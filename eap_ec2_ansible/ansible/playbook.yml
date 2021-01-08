@@ -1,0 +1,203 @@
+- name: Create EC2 instnace
+  hosts: controller
+  connection: local
+  gather_facts: False
+
+  vars:
+    aws_access_key: "{{ lookup('env','AWS_ACCESS_KEY') }}"
+    aws_secret_key: "{{ lookup('env','AWS_ACCESS_SECRET') }}"
+    aws_region: "us-east-2"
+    aws_image: "ami-0521f00d52dfa407d"
+    aws_vpc_subnet_id: "subnet-3c1bad70"
+    aws_keyname: "f5demo"
+
+  tasks:
+    - name: Provision instance
+      ec2:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        key_name: "{{ aws_keyname }}"
+        instance_type: t2.small
+        image: "{{ aws_image }}"
+        wait: yes
+        count: 1
+        region: "{{ aws_region }}"
+        vpc_subnet_id: "{{ aws_vpc_subnet_id }}"
+        group:
+          - webserver
+        assign_public_ip: yes
+      register: ec2instance
+
+    - name: Setting instnace IP
+      set_fact:
+        instance_ip: "{{ ec2instance.instances[0].public_ip }}"
+
+- name: Protect created instance
+  hosts: controller
+  gather_facts: false
+  collections:
+    - f5devcentral.cloudservices
+  connection: httpapi
+
+  vars:
+    ansible_network_os: f5devcentral.cloudservices.f5
+    ansible_host: "api.cloudservices.f5.com"
+    ansible_user: "{{ lookup('env','F5_USERNAME') }}"
+    ansible_httpapi_password: "{{ lookup('env','F5_PASSWORD') }}"
+    ansible_httpapi_use_ssl: yes
+    f5_account_id: "{{ lookup('env','F5_ACCOUNT_ID') }}"
+    aws_region: "us-east-2"
+    fqdn: "{{ lookup('env','FQDN') }}"
+
+  tasks:
+    - name: Create EAP App
+      f5_cs_eap_subscription_app:
+        account_id: "{{ f5_account_id }}"
+        service_instance_name: "{{ fqdn }}"
+        patch: true
+        wait_status_change: true
+        waf_regions:
+          aws:
+            - name: "{{ aws_region }}"
+              value:
+                endpoint:
+                  http:
+                    enabled: true
+                    port: 80
+                  https:
+                    enabled: false
+                  ips:
+                    - "{{ instance_ip }}"
+        configuration:
+          waf_service:
+            application:
+              cache:
+                enabled: false
+              description: ""
+              fqdn: "{{ fqdn }}"
+              http:
+                enabled: true
+                https_redirect: false
+                port: 80
+              https:
+                enabled: false
+                port: 443
+                tls:
+                  certificate_id: ""
+                  version: "1.2"
+              ntlm: false
+            policy:
+              encoding: "utf-8"
+              compliance_enforcement:
+                enabled: true
+                data_guard:
+                  enabled: true
+                  cc: true
+                  ssn: true
+                sensitive_parameters:
+                  enabled: true
+                  parameters:
+                    - "cc_id"
+                    - "creditcard"
+                    - "passwd"
+                    - "password"
+                  xml_attributes: []
+                  xml_elements: []
+              high_risk_attack_mitigation:
+                enabled: true
+                enforcement_mode: "monitoring"
+                allowed_methods:
+                  enabled: true
+                  methods:
+                    - name: "GET"
+                    - name: "POST"
+                    - name: "HEAD"
+                api_compliance_enforcement:
+                  enabled: false
+                disallowed_file_types:
+                  enabled: true
+                  file_types:
+                    - "back"
+                    - "bat"
+                    - "bck"
+                    - "bin"
+                    - "cfg"
+                    - "cmd"
+                    - "com"
+                    - "config"
+                    - "dat"
+                    - "dll"
+                    - "eml"
+                    - "exe"
+                    - "exe1"
+                    - "exe_renamed"
+                    - "hta"
+                    - "htr"
+                    - "htw"
+                    - "ida"
+                    - "idc"
+                    - "idq"
+                    - "ini"
+                    - "old"
+                    - "sav"
+                    - "save"
+                geolocation_enforcement:
+                  enabled: true
+                  disallowed_country_codes:
+                    - "CU"
+                    - "IR"
+                    - "KP"
+                    - "LY"
+                    - "SD"
+                    - "SY"
+                http_compliance_enforcement:
+                  enabled: false
+                ip_enforcement:
+                  enabled: true
+                  ips: []
+                signature_enforcement:
+                  enabled: true
+              malicious_ip_enforcement:
+                enabled: true
+                enforcement_mode: "blocking"
+                ip_categories:
+                  - block: true
+                    log: true
+                    name: "mobile_threats"
+                  - block: true
+                    log: true
+                    name: "cloud_services"
+                  - block: true
+                    log: true
+                    name: "anonymous_proxies"
+                  - block: true
+                    log: true
+                    name: "phishing_proxies"
+                  - block: true
+                    log: true
+                    name: "infected_sources"
+                  - block: true
+                    log: true
+                    name: "denial_of_service"
+                  - block: true
+                    log: true
+                    name: "scanners"
+                  - block: true
+                    log: true
+                    name: "bot_nets"
+                  - block: true
+                    log: true
+                    name: "web_attacks"
+                  - block: true
+                    log: true
+                    name: "windows_exploits"
+                  - block: true
+                    log: true
+                    name: "spam_sources"
+                  - block: false
+                    log: false
+                    name: "tor_proxies"
+              threat_campaigns:
+                enabled: true
+                enforcement_mode: "blocking"
+                campaigns: []

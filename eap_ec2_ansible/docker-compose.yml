@@ -1,0 +1,14 @@
+version: '3.7'
+
+services:
+  ansible:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - F5_USERNAME=${F5_USERNAME}
+      - F5_PASSWORD=${F5_PASSWORD}
+      - F5_ACCOUNT_ID=${F5_ACCOUNT_ID}
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_ACCESS_SECRET=${AWS_ACCESS_SECRET}
+      - FQDN=${FQDN}
