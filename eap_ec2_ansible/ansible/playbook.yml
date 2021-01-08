@@ -55,7 +55,7 @@
         account_id: "{{ f5_account_id }}"
         service_instance_name: "{{ fqdn }}"
         patch: true
-        wait_status_change: true
+        wait_status_change: false
         waf_regions:
           aws:
             - name: "{{ aws_region }}"
